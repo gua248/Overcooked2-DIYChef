@@ -321,6 +321,7 @@ namespace OC2DIYChef
             if (!emoteWheel.ForUI || !emoteWheel.IsLocal || emoteSelector.IsActive()) return;
             int step = __instance.UpJustPressed() ? 1 : (__instance.DownJustPressed() ? -1 : 0);
             if (step == 0) return;
+            if (Mathf.Abs(__instance.XValue()) > 0.01 || Mathf.Abs(__instance.YValue()) < 0.99) return;
 
             int player = (int)emoteWheel.m_player;
             FastList<User> users = ClientUserSystem.m_Users;

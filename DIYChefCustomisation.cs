@@ -173,8 +173,8 @@ namespace OC2DIYChef
                         int num = unlocked.FindIndex_Predicate(x => x.HeadName.Equals(pair.Key));
                         if (num < 0)
                         {
-                            preferredChefs.AddItem(new KeyValuePair<string, HatMeshVisibility.VisState>(
-                                "Chef_Male_Asian", (HatMeshVisibility.VisState)(-1)));
+                            preferredChefs = preferredChefs.AddItem(new KeyValuePair<string, HatMeshVisibility.VisState>(
+                                "Chef_Male_Asian", (HatMeshVisibility.VisState)(-1))).ToArray();
                             defaultChefID = 15;
                             ShowWarningDialog(dialogText["DefaultInvalid"]);
                         }

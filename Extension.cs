@@ -47,7 +47,9 @@ namespace OC2DIYChef.Extension
         static readonly FieldInfo fieldInfo_m_upButton = AccessTools.Field(typeof(ClientEmoteWheel), "m_upButton");
         static readonly FieldInfo fieldInfo_m_emoteWheel = AccessTools.Field(typeof(ClientEmoteWheel), "m_emoteWheel");
         static readonly FieldInfo fieldInfo_m_emoteSelector = AccessTools.Field(typeof(ClientEmoteWheel), "m_emoteSelector");
-
+        static readonly FieldInfo fieldInfo_m_xMovement = AccessTools.Field(typeof(ClientEmoteWheel), "m_xMovement");
+        static readonly FieldInfo fieldInfo_m_yMovement = AccessTools.Field(typeof(ClientEmoteWheel), "m_yMovement");
+       
         public static bool DownJustPressed(this ClientEmoteWheel instance)
         {
             var button = (ILogicalButton)fieldInfo_m_downButton.GetValue(instance);
@@ -58,6 +60,18 @@ namespace OC2DIYChef.Extension
         {
             var button = (ILogicalButton)fieldInfo_m_upButton.GetValue(instance);
             return button.JustPressed();
+        }
+
+        public static float XValue(this ClientEmoteWheel instance)
+        {
+            var button = (ILogicalValue)fieldInfo_m_xMovement.GetValue(instance);
+            return button.GetValue();
+        }
+
+        public static float YValue(this ClientEmoteWheel instance)
+        {
+            var button = (ILogicalValue)fieldInfo_m_yMovement.GetValue(instance);
+            return button.GetValue();
         }
 
         public static EmoteWheel get_m_emoteWheel(this ClientEmoteWheel instance)
