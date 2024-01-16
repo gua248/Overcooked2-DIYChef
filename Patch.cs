@@ -96,7 +96,7 @@ namespace OC2DIYChef
 
         [HarmonyPrefix]
         [HarmonyPatch(typeof(FrontendChef), "SetChefHat")]
-        public static void FrontendChefSetChefHat(FrontendChef __instance, ref HatMeshVisibility.VisState _hat)
+        public static void FrontendChefSetChefHatPatch(FrontendChef __instance, ref HatMeshVisibility.VisState _hat)
         {
             ChefMeshReplacer replacer = __instance.GetComponent<ChefMeshReplacer>();
             if (replacer == null) return;
@@ -108,8 +108,8 @@ namespace OC2DIYChef
         }
 
         [HarmonyPrefix]
-        [HarmonyPatch(typeof(ClientHatMeshVisibility), "Setup")]
-        public static void ClientHatMeshVisibilitySetup(ClientHatMeshVisibility __instance, ref HatMeshVisibility.VisState _state)
+        [HarmonyPatch(typeof(ClientMeshVisibilityBase<HatMeshVisibility.VisState>), "Setup")]
+        public static void ClientHatMeshVisibilitySetupPatch(ClientHatMeshVisibility __instance, ref HatMeshVisibility.VisState _state)
         {
             ChefMeshReplacer replacer = __instance.GetComponent<ChefMeshReplacer>();
             if (replacer == null) return;
