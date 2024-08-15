@@ -9,6 +9,7 @@ using Team17.Online.Multiplayer;
 using UnityEngine;
 using BitStream;
 using System.Collections.Generic;
+using System.Reflection.Emit;
 
 namespace OC2DIYChef
 {
@@ -85,39 +86,77 @@ namespace OC2DIYChef
 
     public static class Patch
     {
-        [HarmonyPostfix]
-        [HarmonyPatch(typeof(PlayerRespawnBehaviour), "Initialise")]
-        public static void PlayerRespawnBehaviourInitialisePatch(PlayerRespawnBehaviour __instance)
-        {
-            Shader shader = Shader.Find("Overcooked_2/OC2_Character_Skin");
-            if (shader != null)
-                __instance.m_fadeShader = shader;
-        }
+        //[HarmonyPostfix]
+        //[HarmonyPatch(typeof(PlayerRespawnBehaviour), "Initialise")]
+        //public static void PlayerRespawnBehaviourInitialisePatch(PlayerRespawnBehaviour __instance)
+        //{
+        //    Shader shader = Shader.Find("Overcooked_2/OC2_Character_Skin");
+        //    if (shader != null)
+        //        __instance.m_fadeShader = shader;
+        //}
 
         [HarmonyPrefix]
         [HarmonyPatch(typeof(FrontendChef), "SetChefHat")]
         public static void FrontendChefSetChefHatPatch(FrontendChef __instance, ref HatMeshVisibility.VisState _hat)
         {
-            ChefMeshReplacer replacer = __instance.GetComponent<ChefMeshReplacer>();
-            if (replacer == null) return;
-            string headName = replacer.get_m_currentHeadName();
-            int index = DIYChefCustomisation.preferredChefs.FindIndex_Predicate(x => x.Key == headName);
-            if (index >= 0 && DIYChefCustomisation.preferredChefs[index].Value != (HatMeshVisibility.VisState)(-1))
-                _hat = DIYChefCustomisation.preferredChefs[index].Value;
-            return;
+            HatData.SetChefHat(__instance.gameObject, ref _hat);
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(BodyMeshVisibility), "Awake")]
+        public static void BodyMeshVisibilityAwakePatch(BodyMeshVisibility __instance)
+        {
+            if (!__instance.m_meshes.Contains("Body_NeckTie"))
+                __instance.m_meshes = __instance.m_meshes.AddRangeToArray(new string[]
+                {
+                    "Body_NeckTie",
+                    "Body_Top",
+                    "Body_Bottom",
+                    "Body_Tail",
+                    "Body_Body",
+                });
+        }
+
+        [HarmonyTranspiler]
+        [HarmonyPatch(typeof(ChefMeshReplacer), "ReplaceModel")]
+        public static IEnumerable<CodeInstruction> ChefMeshReplacerReplaceModelPatch(IEnumerable<CodeInstruction> instructions)
+        {
+            var codes = instructions.ToList();
+            codes.RemoveRange(267, 3);
+            codes.RemoveRange(258, 6);
+            return codes.AsEnumerable();
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(ChefMeshReplacer), "AssignBodyColour")]
+        public static bool ChefMeshReplacerAssignBodyColourPatch(GameObject _root, GameSession.SelectedChefData _data)
+        {
+            _root.SetActive(true);  // prefab is an inactive gameobject
+            int maskParamID = Shader.PropertyToID("_MaskColor");
+            Transform tMesh = _root.transform.Find("Mesh");
+            for (int i = 0; i < tMesh.childCount; i++)
+                if (tMesh.GetChild(i).name.StartsWith("Body"))
+                {
+                    GameObject gameObject = tMesh.GetChild(i).gameObject;
+                    if (gameObject.name.Equals("Body") && // diy body uses SwapColourValue
+                        _data.Character.ColourisationMode == ChefMeshReplacer.ChefColourisationMode.SwapMaterial)
+                    {
+                        gameObject.RequireComponent<SkinnedMeshRenderer>().material = _data.Colour.ChefMaterial;
+                    }
+                    else 
+                    {
+                        Material material = gameObject.RequireComponent<SkinnedMeshRenderer>().material;
+                        material.SetColor(maskParamID, _data.Colour.MaskColour);
+                    }
+                }
+            return false;
         }
 
         [HarmonyPrefix]
         [HarmonyPatch(typeof(ClientMeshVisibilityBase<HatMeshVisibility.VisState>), "Setup")]
         public static void ClientHatMeshVisibilitySetupPatch(ClientHatMeshVisibility __instance, ref HatMeshVisibility.VisState _state)
         {
-            ChefMeshReplacer replacer = __instance.GetComponent<ChefMeshReplacer>();
-            if (replacer == null) return;
-            string headName = replacer.get_m_currentHeadName();
-            int index = DIYChefCustomisation.preferredChefs.FindIndex_Predicate(x => x.Key == headName);
-            if (index >= 0 && DIYChefCustomisation.preferredChefs[index].Value != (HatMeshVisibility.VisState)(-1))
-                _state = DIYChefCustomisation.preferredChefs[index].Value;
-            return;
+            HatData.SetChefHat(__instance.gameObject, ref _state);
         }
 
         public static void PatchInternal(Harmony harmony)
@@ -205,13 +244,6 @@ namespace OC2DIYChef
         }
 
         [HarmonyPrefix]
-        [HarmonyPatch(typeof(ChefMeshReplacer), "AssignBodyColour")]
-        public static void ChefMeshReplacerAssignBodyColourPatch(GameObject _root)
-        {
-            _root.SetActive(true);
-        }
-
-        [HarmonyPrefix]
         [HarmonyPatch(typeof(UIPlayerMenuBehaviour), "SetupChefModel")]
         public static bool UIPlayerMenuBehaviourSetupChefModelPatch(UIPlayerMenuBehaviour __instance, bool _force)
         {
@@ -237,7 +269,9 @@ namespace OC2DIYChef
                 byte diyChefID = DIYChefCustomisation.userDIYChefID[player];
                 var diyChef = DIYChefCustomisation.diyChefs.Find(x => x.id == diyChefID);
                 if (diyChef != null)
+                {
                     selectedChefData = new GameSession.SelectedChefData(diyChef, selectedChefData.Colour);
+                }
             }
 
             chef.SetChefData(selectedChefData, _force);
@@ -266,7 +300,9 @@ namespace OC2DIYChef
                     byte diyChefID = DIYChefCustomisation.userDIYChefID[i];
                     var diyChef = DIYChefCustomisation.diyChefs.Find(x => x.id == diyChefID);
                     if (diyChef != null)
+                    {
                         selectedChefData = new GameSession.SelectedChefData(diyChef, selectedChefData.Colour);
+                    }
                     if (selectedChefData != null)
                         __instance.m_PlayerChefs[i].SetChefData(selectedChefData, _force);
                     __instance.m_PlayerChefs[i].SetChefHat(__instance.m_ChefHat);
@@ -290,7 +326,9 @@ namespace OC2DIYChef
             byte diyChefID = DIYChefCustomisation.userDIYChefID[player];
             var diyChef = DIYChefCustomisation.diyChefs.Find(x => x.id == diyChefID);
             if (diyChef != null)
+            {
                 selectedChef = new GameSession.SelectedChefData(diyChef, selectedChef.Colour);
+            }
             return true;
         }
 
@@ -393,6 +431,20 @@ namespace OC2DIYChef
         {
             __result = true;
             return false;
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(TimeManager), "Update")]
+        public static bool TimeManagerUpdatePatch() => false;
+
+        private static readonly MethodInfo methodInfoDeltaTime = AccessTools.PropertyGetter(typeof(Time), "deltaTime");
+        [HarmonyTranspiler]
+        [HarmonyPatch(typeof(MaterialTimeController), "Update")]
+        public static IEnumerable<CodeInstruction> MaterialTimeControllerUpdatePatch(IEnumerable<CodeInstruction> instructions)
+        {
+            var codes = instructions.ToList();
+            codes[6] = new CodeInstruction(OpCodes.Call, methodInfoDeltaTime);
+            return codes.AsEnumerable();
         }
     }
 }

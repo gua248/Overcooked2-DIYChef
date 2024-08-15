@@ -3,3 +3,5 @@ lib/
 obj/
 .vs/
 *.pdf
+BODY/
+todo*

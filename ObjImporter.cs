@@ -12,6 +12,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.IO;
+//using System.Threading; // async sometimes causes crash
 
 #pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 #pragma warning disable CS0649 // Field never assigned
@@ -23,7 +24,7 @@ public static class ObjImporter
         public int i, j, k;
     }
 
-    private struct meshStruct
+    private struct MeshStruct
     {
         public Vector3[] vertices;
         public Vector3[] normals;
@@ -37,10 +38,17 @@ public static class ObjImporter
         public string name;
     }
 
-    // Use this for initialization
     public static Mesh ImportFile(string filePath)
     {
-        meshStruct newMesh = CreateMeshStruct(filePath);
+        Mesh mesh = new Mesh();
+        ImportFile(filePath, ref mesh);
+        return mesh;
+    }
+
+    // Use this for initialization
+    static void ImportFile(string filePath, ref Mesh mesh)
+    {
+        MeshStruct newMesh = CreateMeshStruct(filePath);
 
         Vector3[] newVerts = new Vector3[newMesh.faceData.Length];
         Vector2[] newUVs = new Vector2[newMesh.faceData.Length];
@@ -61,26 +69,28 @@ public static class ObjImporter
             i++;
         }
 
-        Mesh mesh = new Mesh();
-
         mesh.vertices = newVerts;
         mesh.uv = newUVs;
         mesh.normals = newNormals;
         mesh.triangles = newMesh.triangles;
 
         mesh.RecalculateBounds();
-
-        return mesh;
+        mesh.RecalculateTangents();
+        /*
+         * https://docs.unity3d.com/ScriptReference/Mesh-tangents.html
+         * "You should calculate tangents yourself if you plan to use bump-mapped shaders on the Mesh." 
+         * "Assign tangents after assigning normals or using RecalculateNormals."
+         */
     }
 
-    private static meshStruct CreateMeshStruct(string filename)
+    private static MeshStruct CreateMeshStruct(string filename)
     {
         int triangles = 0;
         int vertices = 0;
         int vt = 0;
         int vn = 0;
         int face = 0;
-        meshStruct mesh = new meshStruct();
+        MeshStruct mesh = new MeshStruct();
         StreamReader stream = File.OpenText(filename);
         string entireText = stream.ReadToEnd();
         stream.Close();
@@ -96,7 +106,7 @@ public static class ObjImporter
                     currentText = currentText.Trim();                           //Trim the current line
                     brokenString = currentText.Split(splitIdentifier, 50);      //Split the line into an array, separating the original line by blank spaces
                     face = face + brokenString.Length - 1;
-                    triangles += 3 * (brokenString.Length - 2); /*brokenString.Length is 3 or greater since a face must have at least
+                    triangles += 3 * (brokenString.Length - 3); /*brokenString.Length is 4 or greater since a face must have at least
                                                                                      3 vertices.  For each additional vertice, there is an additional
                                                                                      triangle in the mesh (hence this formula).*/
                 }
@@ -125,7 +135,7 @@ public static class ObjImporter
         return mesh;
     }
 
-    private static void PopulateMeshStruct(ref meshStruct mesh, string entireText)
+    private static void PopulateMeshStruct(ref MeshStruct mesh, string entireText)
     {
         using (StringReader reader = new StringReader(entireText))
         {

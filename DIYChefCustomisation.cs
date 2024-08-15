@@ -10,21 +10,29 @@ using Team17.Online.Multiplayer;
 using Team17.Online.Multiplayer.Messaging;
 using BitStream;
 using OC2DIYChef.Extension;
+using System.Collections;
 
 namespace OC2DIYChef
 {
     public static class DIYChefCustomisation
     {
-        public static KeyValuePair<string, HatMeshVisibility.VisState>[] preferredChefs;
+        public static KeyValuePair<string, string>[] preferredChefs;
         public static uint defaultChefID = 127;
         public static List<DIYChefAvatarData> diyChefs = new List<DIYChefAvatarData>();
+        public static List<HatData> diyHats = new List<HatData>();
         public static byte[] userDIYChefID = Enumerable.Repeat((byte)255, 4).ToArray();
         private static Dictionary<string, string> dialogText;
         public static bool enableLobbySwitchChef = false;
+        public static ChefAvatarData defaultTemplate;
+        public static Dictionary<string, Matrix4x4> bindposesMatrices;
 
         public static Client localClient = null;
         public static Server localServer = null;
         public const MessageType diyChefMessageType = (MessageType)67;
+
+        public static GUIStyle guiStyle;
+        static IEnumerator loadingCoroutine1, loadingCoroutine2;
+        static string loadingName;
 
         public static void SendClientDIYChefMessage(byte diyChefID, User user)
         {
@@ -117,28 +125,75 @@ namespace OC2DIYChef
                     {"DefaultInvalid", "默认厨师不可用" },
                     {"MissingINFO", "缺失 INFO 文件" },
                     {"MissingTexture", "缺失主贴图" },
-                    {"IDConflict", "ID 冲突" }
+                    {"IDConflict", "ID 冲突" },
+                    {"HatInvalid", "帽子不可用" },
                 } :
                 new Dictionary<string, string>()
                 {
                     {"DefaultInvalid", "Invalid default chef" },
                     {"MissingINFO", "Missing INFO file" },
                     {"MissingTexture", "Missing main texture" },
-                    {"IDConflict", "ID conflict" }
+                    {"IDConflict", "ID conflict" },
+                    {"HatInvalid", "Invalid hat" },
                 };
-            DIYChefAvatarData.bindposesMatrices = LoadBindposesMatrices();
+            defaultTemplate = metaGameProgress.AvatarDirectory.Avatars[15];
+            bindposesMatrices = LoadBindposesMatrices();
             LoadPreferredChefs(metaGameProgress);
-            LoadAllDIYChef(metaGameProgress);
+            loadingCoroutine1 = LoadAllDIYHat();
+            loadingCoroutine2 = LoadAllDIYChef(metaGameProgress);
             ServerUserSystem.OnUserRemovedWithIndex = (GenericVoid<User, int>)Delegate.Combine(ServerUserSystem.OnUserRemovedWithIndex, new GenericVoid<User, int>(OnUserRemoved));
             ServerUserSystem.OnUserAdded = (GenericVoid<User>)Delegate.Combine(ServerUserSystem.OnUserAdded, new GenericVoid<User>(OnUserAdded));
         }
 
+        public static void Update()
+        {
+            if (loadingCoroutine1 != null || loadingCoroutine2 != null)
+            {
+                Time.timeScale = 0f;
+                if (loadingCoroutine1 != null)
+                {
+                    if (!loadingCoroutine1.MoveNext())
+                        loadingCoroutine1 = null;
+                }
+                else if (!loadingCoroutine2.MoveNext())
+                {
+                    loadingCoroutine2 = null;
+                    Time.timeScale = 1f;
+                }
+            }
+        }
+
+        public static void OnGUI()
+        {
+            if (guiStyle == null)
+            {
+                Texture2D consoleBackground = new Texture2D(1, 1, TextureFormat.RGBAFloat, false);
+                consoleBackground.SetPixel(0, 0, new Color(0.23f, 0.65f, 0.79f, 1f));
+                consoleBackground.Apply();
+                guiStyle = new GUIStyle(GUIStyle.none);
+                guiStyle.normal.textColor = new Color(1f, 1f, 1f);
+                guiStyle.normal.background = consoleBackground;
+                guiStyle.fontStyle = FontStyle.Bold;
+                guiStyle.fontSize = 40;
+                guiStyle.alignment = TextAnchor.MiddleLeft;
+                guiStyle.padding = new RectOffset(50, 50, 20, 20);
+            }
+            if (loadingCoroutine1 == null && loadingCoroutine2 == null) return;
+            string info = Localization.GetLanguage() == SupportedLanguages.Chinese ? 
+                $"加载模型 [{loadingName}]" : $"Loading Chef [{loadingName}]";
+            var guiContent = new GUIContent(info);
+            var labelSize = guiStyle.CalcSize(guiContent);
+            GUI.Label(new Rect(50, Screen.height * 0.8f, labelSize.x, labelSize.y), guiContent, guiStyle);
+        }
+
         private static void LoadPreferredChefs(MetaGameProgress metaGameProgress)
         {
-            preferredChefs = new KeyValuePair<string, HatMeshVisibility.VisState>[0];
+            preferredChefs = new KeyValuePair<string, string>[0];
             string path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) + "/prefer.txt";
             if (!File.Exists(path))
-            {
+                path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) + "/prefer.txt.txt";
+            if (!File.Exists(path))
+            { 
                 defaultChefID = 127U;
                 return;
             }
@@ -152,29 +207,25 @@ namespace OC2DIYChef
                 }
                 var parts = line.Split(new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).ConvertAll(s => s.Trim());
                 if (parts.Length == 0) continue;
-                HatMeshVisibility.VisState hatState = (HatMeshVisibility.VisState)(-1);
+                string hat = "";
                 if (parts.Length > 1 && parts[1].StartsWith("HAT="))
                 {
-                    string hat = parts[1].Substring(4);
-                    hatState =
-                        hat == "None" ? HatMeshVisibility.VisState.None : (
-                        hat == "Fancy" ? HatMeshVisibility.VisState.Fancy : (
-                        hat == "Festive" ? HatMeshVisibility.VisState.Festive : (
-                        hat == "Baseball" ? HatMeshVisibility.VisState.Baseball :
-                        (HatMeshVisibility.VisState)(-1))));
+                    hat = parts[1].Substring(4);
+                    if (hat == "Festive") hat = "Santa";
+                    if (hat == "Baseball") hat = "Baseballcap";
                 }
-                var pair = new KeyValuePair<string, HatMeshVisibility.VisState>(parts[0], hatState);
+                var pair = new KeyValuePair<string, string>(parts[0], hat);
                 if (!preferredChefs.Any(x => x.Key == pair.Key))
                 {
-                    preferredChefs = preferredChefs.AddItem(pair).ToArray();
+                    preferredChefs = preferredChefs.AddToArray(pair);
                     if (preferredChefs.Length == 1)
                     {
                         ChefAvatarData[] unlocked = metaGameProgress.GetUnlockedAvatars();
                         int num = unlocked.FindIndex_Predicate(x => x.HeadName.Equals(pair.Key));
                         if (num < 0)
                         {
-                            preferredChefs = preferredChefs.AddItem(new KeyValuePair<string, HatMeshVisibility.VisState>(
-                                "Chef_Male_Asian", (HatMeshVisibility.VisState)(-1))).ToArray();
+                            preferredChefs = preferredChefs.AddItem(
+                                new KeyValuePair<string, string>("Chef_Male_Asian", "")).ToArray();
                             defaultChefID = 15;
                             ShowWarningDialog(dialogText["DefaultInvalid"]);
                         }
@@ -226,50 +277,123 @@ namespace OC2DIYChef
             return bindposesMatrices;
         }
 
-        private static void LoadAllDIYChef(MetaGameProgress metaGameProgress)
+        static IEnumerator LoadAllDIYHat()
         {
-            var newPreferredChefs = new List<KeyValuePair<string, HatMeshVisibility.VisState>>();
+            diyHats.Clear();
+            if (!Enabled)
+                yield break;
+            diyHats.Add(HatData.Create("Santa"));
+            diyHats.Add(HatData.Create("Baseballcap"));
+
+            string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string path = dir + "/Resources/HATS";
+            if (!Directory.Exists(path))
+                yield break;
+
+            DirectoryInfo parent = new DirectoryInfo(path);
+            foreach (DirectoryInfo folder in parent.GetDirectories())
+            {
+                string name = folder.Name;
+                if (File.Exists($"{path}/{name}/t_{name}.png") &&
+                    File.Exists($"{path}/{name}/m_{name}.txt"))
+                {
+                    loadingName = "HATS/" + name;
+                    yield return null;
+                    diyHats.Add(HatData.Create(name));
+                }
+            }
+            yield break;
+        }
+
+        static void FixBodyMeshBug(MetaGameProgress metaGameProgress)
+        {
+            var avatar = metaGameProgress.AvatarDirectory.Avatars[15];
+            foreach (var prefab in new GameObject[] { avatar.FrontendModelPrefab, avatar.ModelPrefab, avatar.UIModelPrefab })
+            {
+                Mesh mesh = prefab.transform.Find("Mesh/Body").GetComponent<SkinnedMeshRenderer>().sharedMesh;
+                BoneWeight[] boneWeights = new BoneWeight[mesh.boneWeights.Length];
+                for (int i = 0; i < mesh.boneWeights.Length; i++)
+                    boneWeights[i] = mesh.boneWeights[i];
+                boneWeights[166] = mesh.boneWeights[255];
+                boneWeights[256] = mesh.boneWeights[255];
+                mesh.boneWeights = boneWeights;
+            }
+        }
+
+        static IEnumerator LoadAllDIYChef(MetaGameProgress metaGameProgress)
+        {
+            var newPreferredChefs = new List<KeyValuePair<string, string>>();
             diyChefs.Clear();
-            if (!Enabled) return;
+            if (!Enabled) 
+                yield break;
             string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             string conflictMessage = string.Empty;
-            DIYChefAvatarData.defaultTemplate = metaGameProgress.AvatarDirectory.Avatars[15];
+            FixBodyMeshBug(metaGameProgress);
 
             foreach (var pair in preferredChefs)
             {
                 if (metaGameProgress.AvatarDirectory.Avatars.Any(x => x.HeadName == pair.Key))
                 {
-                    newPreferredChefs.Add(pair);
+                    if (!HatData.originalHats.Contains(pair.Value) && !diyHats.Any(x => x.HatName == "Hat_" + pair.Value))
+                    {
+                        conflictMessage += $"{dialogText["HatInvalid"]}: {pair.Value}\n";
+                        newPreferredChefs.Add(new KeyValuePair<string, string>(pair.Key, ""));
+                    }
+                    else
+                    {
+                        newPreferredChefs.Add(pair);
+                    }
                     continue;
                 }
                 string path = dir + "/Resources/" + pair.Key;
-                if (!Directory.Exists(path)) continue;
+                if (!Directory.Exists(path))
+                    continue;
                 if (!File.Exists(path + "/INFO"))
                 {
                     conflictMessage += $"{dialogText["MissingINFO"]}: {pair.Key}\n";
                     continue;
                 }
+
                 if (!File.Exists(path + "/t_Head.png") || !File.Exists(path + "/m_Head.txt"))
                 {
                     conflictMessage += $"{dialogText["MissingTexture"]}: {pair.Key}\n";
                     continue;
                 }
 
-                DIYChefAvatarData avatar = new DIYChefAvatarData(pair.Key);
-                var conflictChef = diyChefs.Find(x => x.id == avatar.id);
-                if (avatar.id == 255)
+                var lines = File.ReadAllLines(path + "/INFO");
+                byte id = 255;
+                foreach (var line in lines)
+                {
+                    if (line.StartsWith("ID="))
+                        byte.TryParse(line.Substring(3), out id);
+                }
+                var conflictChef = diyChefs.Find(x => x.id == id);
+                if (id == 255)
                     conflictMessage += $"{dialogText["IDConflict"]}: {pair.Key}, 255\n";
-                else if (conflictChef != null) 
+                else if (conflictChef != null)
                     conflictMessage += $"{dialogText["IDConflict"]}: {conflictChef.name}, {pair.Key}\n";
                 else
                 {
+                    loadingName = pair.Key;
+                    yield return null;
+                    DIYChefAvatarData avatar = DIYChefAvatarData.Create(pair.Key);
                     diyChefs.Add(avatar);
-                    newPreferredChefs.Add(new KeyValuePair<string, HatMeshVisibility.VisState>(avatar.HeadName, pair.Value));
+                    if (!HatData.originalHats.Contains(pair.Value) && !diyHats.Any(x => x.HatName == "Hat_" + pair.Value))
+                    {
+                        conflictMessage += $"{dialogText["HatInvalid"]}: {pair.Value}\n";
+                        newPreferredChefs.Add(new KeyValuePair<string, string>(avatar.HeadName, ""));
+                    }
+                    else
+                    {
+                        newPreferredChefs.Add(new KeyValuePair<string, string>(avatar.HeadName, pair.Value));
+                    }
                 }
             }
+
             if (conflictMessage != string.Empty)
                 ShowWarningDialog(conflictMessage.TrimEnd());
             preferredChefs = newPreferredChefs.ToArray();
+            yield break;
         }
 
         public static void SwitchChef(int player, int step, out uint uAvatarID, out byte uDIYAvatarID)
@@ -313,41 +437,191 @@ namespace OC2DIYChef
         {
             get { return defaultChefID != 127U; }
         }
+
+        public static void SetHideFlagsRecursive(GameObject gameObject, HideFlags hideFlags)
+        {
+            gameObject.hideFlags = hideFlags;
+            foreach (Transform child in gameObject.transform)
+                SetHideFlagsRecursive(child.gameObject, hideFlags);
+        }
+    }
+
+    public class HatData : ScriptableObject
+    {
+        GameObject prefab;
+        public string HatName;
+        public static readonly string[] originalHats = new string[] { "", "None", "Santa", "Fancy", "Baseballcap" };
+
+        public static HatData Create(string name)
+        {
+            HatData hatData = CreateInstance<HatData>();
+            hatData.Init(name);
+            return hatData;
+        }
+
+        void Init(string name)
+        {
+            string hatName = name.StartsWith("Hat_") ? name : "Hat_" + name;
+            this.name = hatName;
+            HatName = hatName;
+
+            if (name == "Baseballcap")
+            {
+                prefab = DIYChefCustomisation.defaultTemplate.ModelPrefab.transform.FindChildStartsWithRecursive("Hat_Baseballcap").gameObject;
+                return;
+            }
+            if (name == "Santa")
+            {
+                prefab = DIYChefCustomisation.defaultTemplate.ModelPrefab.transform.FindChildStartsWithRecursive("Hat_Santa").gameObject;
+                return;
+            }
+
+            string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string path = dir + "/Resources/HATS/" + name;
+
+            byte[] rawData = File.ReadAllBytes($"{path}/t_{name}.png");
+            Texture2D texture = new Texture2D(2, 2);
+            texture.LoadImage(rawData);
+
+            Mesh mesh = ObjImporter.ImportFile($"{path}/{name}.obj");
+            mesh.name = hatName;
+            Dictionary<string, float> matParams = new Dictionary<string, float>();
+            var lines = File.ReadAllText($"{path}/m_{name}.txt").Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string line in lines)
+            {
+                if (!line.Contains("=")) continue;
+                string[] parts = line.Split('=');
+                if (float.TryParse(parts[1], out float result))
+                    matParams.SafeAdd(parts[0], result);
+            }
+
+            GameObject hatPrefab = DIYChefCustomisation.defaultTemplate.ModelPrefab.transform.FindChildStartsWithRecursive("Hat_Baseballcap").gameObject;
+            prefab = GameObject.Instantiate(hatPrefab);
+            DIYChefCustomisation.SetHideFlagsRecursive(prefab, HideFlags.HideAndDontSave);
+            prefab.SetActive(false);
+            prefab.SetObjectLayer(hatPrefab.layer);
+            prefab.name = hatName;
+            prefab.transform.SetParent(null, false);
+
+            SkinnedMeshRenderer hat = prefab.GetComponent<SkinnedMeshRenderer>();
+            Material material = hat.material;
+            material.SetTexture("_DiffuseMap", texture);
+            foreach (var pair in matParams)
+                material.SetFloat(pair.Key, pair.Value);
+            
+            mesh.bindposes = hat.bones.Select(x => DIYChefCustomisation.bindposesMatrices[x.name]).ToArray();
+            BoneWeight[] boneWeights = new BoneWeight[mesh.vertexCount];
+            int i = hat.bones.FindIndex_Predicate(x => x.name.Equals("HatBase"));
+            if (i < 0) i = 0;
+            for (int j = 0; j < mesh.vertexCount; j++)
+            {
+                boneWeights[j].weight0 = 1;
+                boneWeights[j].boneIndex0 = i;
+            }
+            mesh.boneWeights = boneWeights;
+            hat.sharedMesh = mesh;
+        }
+
+        public static void SetChefHat(GameObject chef, ref HatMeshVisibility.VisState _hat)
+        {
+            ChefMeshReplacer replacer = chef.GetComponent<ChefMeshReplacer>();
+            if (replacer == null) return;
+            string headName = replacer.get_m_currentHeadName();
+            int index = DIYChefCustomisation.preferredChefs.FindIndex_Predicate(x => x.Key == headName);
+            if (index < 0) return;
+            string hatName = DIYChefCustomisation.preferredChefs[index].Value;
+            if (hatName != "")
+                _hat = 
+                    !originalHats.Contains(hatName) ? HatMeshVisibility.VisState.None : (
+                    hatName == "Baseballcap" ? HatMeshVisibility.VisState.Baseball : (
+                    hatName == "Santa" ? HatMeshVisibility.VisState.Festive : (
+                    hatName == "Fancy" ? HatMeshVisibility.VisState.Fancy : HatMeshVisibility.VisState.None)));
+
+            Transform parent = chef.transform.FindChildRecursive("Mesh");
+            bool isUI = chef.GetComponent<HatMeshVisibility>() == null;
+            if (parent.FindChildRecursive("Hat_" + hatName) == null && DIYChefCustomisation.diyHats.Find(x => x.HatName == "Hat_" + hatName) != null)
+            {
+                GameObject hat = GameObject.Instantiate(DIYChefCustomisation.diyHats.Find(x => x.HatName == "Hat_" + hatName).prefab);
+                hat.SetObjectLayer(parent.gameObject.layer);
+                hat.name = "Hat_" + hatName;
+                hat.transform.SetParent(parent, false);
+                var renderer = hat.GetComponent<SkinnedMeshRenderer>();
+                renderer.rootBone = chef.transform.FindChildRecursive("HatBase");
+                renderer.bones = renderer.bones.Select(x => chef.transform.FindChildRecursive(x.name)).ToArray();
+                if (isUI)
+                {
+                    Material material = renderer.material;
+                    material.shader = Shader.Find("Overcooked_2/OC2_Character_Clothes_UI");
+                }
+            }
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                var child = parent.GetChild(i);
+                if (child.name.StartsWith("Hat_"))
+                    child.gameObject.SetActive(child.name.Substring(4) == hatName);
+            }
+            if (hatName == "")
+            {
+                parent.FindChildRecursive("Hat_Fancy")?.gameObject.SetActive(true);
+                parent.FindChildRecursive("Hat_Baseballcap")?.gameObject.SetActive(!isUI);
+                parent.FindChildRecursive("Hat_Santa")?.gameObject.SetActive(!isUI);
+            }
+        }
     }
 
     public class DIYChefAvatarData : ChefAvatarData
     {
         public byte id = 255;
-        public bool noHat = false;
-        public ChefAvatarData template;
-        public static ChefAvatarData defaultTemplate;
-        public static Dictionary<string, Matrix4x4> bindposesMatrices;
-        private static readonly string[] allowedPart = new string[]
+        ChefAvatarData template;
+        Dictionary<string, Texture2D> textureDict; 
+        Dictionary<string, Mesh> meshDict;
+        Dictionary<string, Dictionary<string, float>> materialDict;
+
+        private static readonly Dictionary<string, string> allowedPartToBone = new Dictionary<string, string>
         {
-            "Eyes", "Eyebrows", "Eyes2_Blinks",
-            "Hand_Grip_L", "Hand_Grip_R", "Hand_Open_L", "Hand_Open_R",
-            "Head", "Tail", "Head1", "Head2"
+            { "Eyes", "Eyes" },
+            { "Eyebrows", "Eyebrows" },
+            { "Eyes2_Blinks", "Eyes2_Blinks" },
+            { "Hand_Grip_L", "LeftHand" },
+            { "Hand_Grip_R", "RightHand" },
+            { "Hand_Open_L", "LeftHand" },
+            { "Hand_Open_R", "RightHand" },
+            { "Tail", "Jnt_Tail" },
+            { "Head", "Head" },
+            { "Head1", "Head" },
+            { "Head2", "Head" },
+            { "Body_NeckTie", "NeckTie" },
+            { "Body_Top", "Body_Top" },
+            { "Body_Bottom", "Jnt_Body" },
+            { "Body_Tail", "Jnt_Tail" },
+            { "Body_Body", "" },
+            { "Wheelchair", "Jnt_Wheelchair" },
         };
 
-        public DIYChefAvatarData(string name)
+        public static DIYChefAvatarData Create(string name)
+        {
+            var chefAvatarData = CreateInstance<DIYChefAvatarData>();
+            chefAvatarData.Init(name);
+            return chefAvatarData;
+        }
+
+        void Init(string name)
         {
             string chefName = name.StartsWith("Chef_") ? name : "Chef_" + name;
             this.name = chefName;
             string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             string path = dir + "/Resources/" + name;
-            var textureDict = new Dictionary<string, Texture2D>();
-            var meshDict = new Dictionary<string, Mesh>();
-            var materialDict = new Dictionary<string, Dictionary<string, float>>();
+            textureDict = new Dictionary<string, Texture2D>();
+            meshDict = new Dictionary<string, Mesh>();
+            materialDict = new Dictionary<string, Dictionary<string, float>>();
             DirectoryInfo folder = new DirectoryInfo(path);
-            template = defaultTemplate;
+            template = DIYChefCustomisation.defaultTemplate;
 
             var lines = File.ReadAllLines(path + "/INFO");
             foreach (var line in lines)
             {
                 if (line.StartsWith("ID=") && byte.TryParse(line.Substring(3), out byte id))
                     this.id = id;
-                if (line.StartsWith("NOHAT=TRUE"))
-                    noHat = true;
                 if (line.StartsWith("BODY="))
                 {
                     var bodyName = line.Substring(5);
@@ -357,7 +631,7 @@ namespace OC2DIYChef
                 }
             }
 
-            foreach (FileInfo file in folder.GetFiles("*.png"))
+            foreach (FileInfo file in folder.GetFiles("t_*.png"))
             {
                 string partName = file.Name.Remove(file.Name.Length - 4, 4);
                 byte[] rawData = File.ReadAllBytes(file.FullName);
@@ -369,7 +643,7 @@ namespace OC2DIYChef
             foreach (FileInfo file in folder.GetFiles("*.obj"))
             {
                 string partName = file.Name.Remove(file.Name.Length - 4, 4);
-                if (!allowedPart.Any(partName.Equals)) continue;
+                if (!allowedPartToBone.Any(x => partName.Equals(x.Key))) continue;
                 Mesh mesh = ObjImporter.ImportFile(file.FullName);
                 meshDict.Add(partName, mesh);
             }
@@ -391,36 +665,34 @@ namespace OC2DIYChef
 
             HeadName = chefName;
             ColourisationMode = template.ColourisationMode;
-            FrontendModelPrefab = CreatePrefabModel(chefName, template, ChefMeshReplacer.ChefModelType.FrontEnd, textureDict, meshDict, materialDict);
-            UIModelPrefab = CreatePrefabModel(chefName, template, ChefMeshReplacer.ChefModelType.UI, textureDict, meshDict, materialDict);
-            ModelPrefab = CreatePrefabModel(chefName, template, ChefMeshReplacer.ChefModelType.InGame, textureDict, meshDict, materialDict);
+            CreatePrefabModel(ChefMeshReplacer.ChefModelType.FrontEnd);
+            CreatePrefabModel(ChefMeshReplacer.ChefModelType.UI);
+            CreatePrefabModel(ChefMeshReplacer.ChefModelType.InGame);
         }
 
-        private static void SetHideFlagsRecursive(GameObject gameObject, HideFlags hideFlags)
-        {
-            gameObject.hideFlags = hideFlags;
-            foreach (Transform child in gameObject.transform)
-                SetHideFlagsRecursive(child.gameObject, hideFlags);
-        }
-
-        private static GameObject CreatePrefabModel(
-            string name,
-            ChefAvatarData template,
-            ChefMeshReplacer.ChefModelType modelType,
-            Dictionary<string, Texture2D> textureDict,
-            Dictionary<string, Mesh> meshDict,
-            Dictionary<string, Dictionary<string, float>> materialDict)
+        void CreatePrefabModel(ChefMeshReplacer.ChefModelType modelType)
         {
             GameObject templatePrefab =
                 modelType == ChefMeshReplacer.ChefModelType.FrontEnd ? template.FrontendModelPrefab : (
                 modelType == ChefMeshReplacer.ChefModelType.UI ? template.UIModelPrefab : 
                 template.ModelPrefab);
+            string postfix =
+                modelType == ChefMeshReplacer.ChefModelType.FrontEnd ? "_FrontEnd" : (
+                modelType == ChefMeshReplacer.ChefModelType.UI ? "_UI" : "");
+
             GameObject prefab = GameObject.Instantiate(templatePrefab);
-            SetHideFlagsRecursive(prefab, HideFlags.HideAndDontSave);
+            DIYChefCustomisation.SetHideFlagsRecursive(prefab, HideFlags.HideAndDontSave);
             prefab.SetActive(false);
             prefab.SetObjectLayer(templatePrefab.layer);
-            prefab.name = name;
+            prefab.name = name + postfix;
             prefab.transform.SetParent(null, false);
+            if (modelType == ChefMeshReplacer.ChefModelType.FrontEnd)
+                FrontendModelPrefab = prefab;
+            else if (modelType == ChefMeshReplacer.ChefModelType.UI)
+                UIModelPrefab = prefab;
+            else
+                ModelPrefab = prefab;
+
             Transform tMesh = prefab.transform.Find("Mesh");
             for (int i = tMesh.childCount - 1; i >= 0; i--)
             {
@@ -431,70 +703,126 @@ namespace OC2DIYChef
 
             SkinnedMeshRenderer head = tMesh.Find(template.HeadName).GetComponent<SkinnedMeshRenderer>();
             head.gameObject.name = name;
+            SkinnedMeshRenderer body = tMesh.Find("Body").GetComponent<SkinnedMeshRenderer>();
 
             foreach (string partName in meshDict.Keys)
             {
                 Transform tPart = partName.Equals("Head") ? head.transform : head.transform.FindChildStartsWithRecursive(partName);
-                string boneName =
-                    partName.StartsWith("Head") ? "Head" : (
-                    partName.Equals("Tail") ? "Jnt_Tail" : (
-                    !partName.StartsWith("Hand") ? partName : (
-                    partName.EndsWith("L") ? "LeftHand" : "RightHand")));
+                string[] boneNames = partName == "Body_Body" ? 
+                    new string[] { "NeckTie", "Body_Top", "Jnt_Body", "Jnt_Tail" } :
+                    new string[] { allowedPartToBone[partName] };
+                bool isBody = partName.StartsWith("Body_");
                 if (tPart == null)
                 {
                     if (partName.StartsWith("Hand")) continue;
-                    Transform[] bones = head.GetComponent<SkinnedMeshRenderer>().bones;
-                    if (!bones.Any(x => x.name.Equals(boneName)))
-                    {
-                        Transform bone = prefab.transform.Find("Skeleton").FindChildRecursive(boneName);
-                        if (bone == null) continue;
-                        head.GetComponent<SkinnedMeshRenderer>().bones = bones.AddToArray(bone);
-                    }
-                    GameObject insPart = GameObject.Instantiate(head).gameObject;
+                    SkinnedMeshRenderer partTemplate = isBody ? body : head;
+                    GameObject insPart = GameObject.Instantiate(partTemplate.gameObject);
                     insPart.hideFlags = HideFlags.HideAndDontSave;
                     insPart.DestroyChildren();
-                    insPart.SetObjectLayer(head.gameObject.layer);
+                    insPart.SetObjectLayer(partTemplate.gameObject.layer);
                     insPart.name = partName;
-                    insPart.transform.SetParent(head.transform, false);
+                    insPart.transform.SetParent(isBody ? body.transform.parent : head.transform, false);
                     insPart.transform.localPosition = Vector3.zero;
                     insPart.transform.localRotation = Quaternion.identity;
                     insPart.transform.localScale = Vector3.one;
+                    Transform[] bones = insPart.GetComponent<SkinnedMeshRenderer>().bones;
+                    foreach (var boneName in boneNames)
+                        if (!bones.Any(x => x.name.Equals(boneName)))
+                        {
+                            Transform bone = prefab.transform.Find("Skeleton").FindChildRecursive(boneName);
+                            bones = bones.AddToArray(bone);
+                        }
+                    insPart.GetComponent<SkinnedMeshRenderer>().bones = bones;
                     tPart = insPart.transform;
                 }
-                
+
                 SkinnedMeshRenderer part = tPart.GetComponent<SkinnedMeshRenderer>();
-                Mesh meshPart = meshDict[partName];
-                //meshPart.bindposes = part.sharedMesh.bindposes;
-                meshPart.bindposes = part.bones.Select(x => bindposesMatrices[x.name]).ToArray();
-                int i = part.bones.FindIndex_Predicate(x => x.name.Equals(boneName));
-                if (i < 0) i = 0;
-                BoneWeight[] boneWeights = new BoneWeight[meshPart.vertexCount];
-                for (int j = 0; j < meshPart.vertexCount; j++)
-                {
-                    boneWeights[j].weight0 = 1;
-                    boneWeights[j].boneIndex0 = i;
-                }
-                meshPart.boneWeights = boneWeights;
-                part.sharedMesh = GameObject.Instantiate(meshPart);
-                
+
                 Material material = part.material;
                 if (textureDict.ContainsKey("t_" + partName))
                     material.SetTexture("_DiffuseMap", textureDict["t_" + partName]);
+                else if (textureDict.ContainsKey("t_Body") && isBody)
+                    material.SetTexture("_DiffuseMap", textureDict["t_Body"]);
                 else
                     material.SetTexture("_DiffuseMap", textureDict["t_Head"]);
-                if (materialDict.ContainsKey("m_" + partName))
+                var materialFloat =
+                    materialDict.ContainsKey("m_" + partName) ? materialDict["m_" + partName] : (
+                    materialDict.ContainsKey("m_Body") && isBody ? materialDict["m_Body"] :
+                    materialDict["m_Head"]);
+                foreach (var pair in materialFloat)
+                    material.SetFloat(pair.Key, pair.Value);
+            }
+
+            if (meshDict.ContainsKey("Body_Body"))
+                GameObject.DestroyImmediate(body.gameObject);
+
+            foreach (string partName in meshDict.Keys)
+            {
+                Transform tPart = partName.Equals("Head") ? head.transform : tMesh.FindChildStartsWithRecursive(partName);
+                string boneName = allowedPartToBone[partName];
+                if (tPart == null) continue;
+
+                SkinnedMeshRenderer part = tPart.GetComponent<SkinnedMeshRenderer>();
+
+                Mesh meshPart = meshDict[partName];
+                meshPart.name = partName;
+                meshPart.bindposes = part.bones.Select(x => DIYChefCustomisation.bindposesMatrices[x.name]).ToArray();
+
+                BoneWeight[] boneWeights = new BoneWeight[meshPart.vertexCount];
+                if (partName != "Body_Body")
                 {
-                    foreach (var pair in materialDict["m_" + partName])
-                        material.SetFloat(pair.Key, pair.Value);
+                    int i = part.bones.FindIndex_Predicate(x => x.name.Equals(boneName));
+                    if (i < 0) i = 0;
+                    for (int j = 0; j < meshPart.vertexCount; j++)
+                    {
+                        boneWeights[j].weight0 = 1;
+                        boneWeights[j].boneIndex0 = i;
+                    }
                 }
                 else
                 {
-                    foreach (var pair in materialDict["m_Head"])
-                        material.SetFloat(pair.Key, pair.Value);
+                    int i1 = part.bones.FindIndex_Predicate(x => x.name.Equals("Body_Top"));
+                    int i2 = part.bones.FindIndex_Predicate(x => x.name.Equals("Jnt_Body"));
+                    for (int j = 0; j < meshPart.vertexCount; j++)
+                    {
+                        boneWeights[j].boneIndex0 = i1;
+                        boneWeights[j].boneIndex1 = i2;
+                        float y = meshPart.vertices[j].y;
+                        if (y > 0.54)
+                        {
+                            boneWeights[j].weight0 = 1.0f;
+                            boneWeights[j].weight1 = 0.0f;
+                        }
+                        else if (y > 0.46)
+                        {
+                            boneWeights[j].weight0 = 0.75f;
+                            boneWeights[j].weight1 = 0.25f;
+                        }
+                        else if (y > 0.38)
+                        {
+                            boneWeights[j].weight0 = 0.5f;
+                            boneWeights[j].weight1 = 0.5f;
+                        }
+                        else if (y > 0.30)
+                        {
+                            boneWeights[j].weight0 = 0.3f;
+                            boneWeights[j].weight1 = 0.7f;
+                        }
+                        else if (y > 0.22)
+                        {
+                            boneWeights[j].weight0 = 0.1f;
+                            boneWeights[j].weight1 = 0.9f;
+                        }
+                        else
+                        {
+                            boneWeights[j].weight0 = 0.0f;
+                            boneWeights[j].weight1 = 1.0f;
+                        }
+                    }
                 }
+                meshPart.boneWeights = boneWeights;
+                part.sharedMesh = meshPart;
             }
-
-            return prefab;
         }
     }
 
