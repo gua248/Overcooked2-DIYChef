@@ -260,7 +260,8 @@ namespace OC2DIYChef
             {
                 string name = folder.Name;
                 if (File.Exists($"{path}/{name}/t_{name}.png") &&
-                    File.Exists($"{path}/{name}/m_{name}.txt"))
+                    File.Exists($"{path}/{name}/m_{name}.txt") &&
+                    preferredChefs.Any(x => x.Value == name))
                 {
                     loadingName = "HATS/" + name;
                     yield return null;
@@ -416,6 +417,7 @@ namespace OC2DIYChef
         GameObject prefab;
         public string HatName;
         public static readonly string[] originalHats = new string[] { "", "None", "Santa", "Fancy", "Baseballcap" };
+        public const int hatLayer = 6;
 
         public static HatData Create(string name)
         {
@@ -504,9 +506,10 @@ namespace OC2DIYChef
 
             Transform parent = chef.transform.FindChildRecursive("Mesh");
             bool isUI = chef.GetComponent<HatMeshVisibility>() == null;
-            if (parent.FindChildRecursive("Hat_" + hatName) == null && DIYChefCustomisation.diyHats.Find(x => x.HatName == "Hat_" + hatName) != null)
+            GameObject hat = parent.FindChildRecursive("Hat_" + hatName)?.gameObject;
+            if (hat == null && DIYChefCustomisation.diyHats.Find(x => x.HatName == "Hat_" + hatName) != null)
             {
-                GameObject hat = GameObject.Instantiate(DIYChefCustomisation.diyHats.Find(x => x.HatName == "Hat_" + hatName).prefab);
+                hat = GameObject.Instantiate(DIYChefCustomisation.diyHats.Find(x => x.HatName == "Hat_" + hatName).prefab);
                 hat.SetObjectLayer(parent.gameObject.layer);
                 hat.name = "Hat_" + hatName;
                 hat.transform.SetParent(parent, false);
@@ -519,6 +522,10 @@ namespace OC2DIYChef
                     material.shader = Shader.Find("Overcooked_2/OC2_Character_Clothes_UI");
                 }
             }
+
+            if (isUI && hat != null && hatName != "Fancy")
+                hat.SetObjectLayer(hatLayer);
+
             for (int i = 0; i < parent.childCount; i++)
             {
                 var child = parent.GetChild(i);

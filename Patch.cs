@@ -95,6 +95,24 @@ namespace OC2DIYChef
         //        __instance.m_fadeShader = shader;
         //}
 
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(UIPlayerRootMenu), "Start")]
+        public static void UIPlayerRootMenuStartPatch(UIPlayerRootMenu __instance)
+        {
+            GameObject light = GameObject.Find("day light");
+            if (light != null && GameObject.Find("hat light") == null)
+            {
+                var hatLight = GameObject.Instantiate(light);
+                hatLight.SetObjectLayer(light.layer);
+                hatLight.name = "hat light";
+                hatLight.transform.SetParent(light.transform.parent);
+                hatLight.GetComponent<Light>().intensity = 1.8f;
+                hatLight.GetComponent<Light>().cullingMask = 1 << HatData.hatLayer;
+            }
+            Camera camera = (Camera)AccessTools.Field(typeof(UIPlayerRootMenu), "m_chefCamera").GetValue(__instance);
+            camera.cullingMask |= 1 << HatData.hatLayer;
+        }
+
         [HarmonyPrefix]
         [HarmonyPatch(typeof(FrontendChef), "SetChefHat")]
         public static void FrontendChefSetChefHatPatch(FrontendChef __instance, ref HatMeshVisibility.VisState _hat)
