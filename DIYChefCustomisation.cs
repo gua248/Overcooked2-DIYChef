@@ -495,8 +495,7 @@ namespace OC2DIYChef
             if (replacer == null) return;
             string headName = replacer.get_m_currentHeadName();
             int index = DIYChefCustomisation.preferredChefs.FindIndex_Predicate(x => x.Key == headName);
-            if (index < 0) return;
-            string hatName = DIYChefCustomisation.preferredChefs[index].Value;
+            string hatName = index < 0 ? "" : DIYChefCustomisation.preferredChefs[index].Value;
             if (hatName != "")
                 _hat = 
                     !originalHats.Contains(hatName) ? HatMeshVisibility.VisState.None : (
