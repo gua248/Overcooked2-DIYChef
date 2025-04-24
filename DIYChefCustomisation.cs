@@ -567,6 +567,7 @@ namespace OC2DIYChef
             { "Body_Tail", "Jnt_Tail" },
             { "Body_Body", "" },
             { "Wheelchair", "Jnt_Wheelchair" },
+            { "Knife", "HeldItem" }, // Cleaver
         };
 
         public static DIYChefAvatarData Create(string name)
@@ -675,10 +676,18 @@ namespace OC2DIYChef
             SkinnedMeshRenderer head = tMesh.Find(template.HeadName).GetComponent<SkinnedMeshRenderer>();
             head.gameObject.name = name;
             SkinnedMeshRenderer body = tMesh.Find("Body").GetComponent<SkinnedMeshRenderer>();
+            SkinnedMeshRenderer knife = (
+                modelType == ChefMeshReplacer.ChefModelType.FrontEnd ? tMesh.Find("Knife") : (
+                modelType == ChefMeshReplacer.ChefModelType.InGame ? tMesh.Find("Cleaver") : null)
+                )?.GetComponent<SkinnedMeshRenderer>();
 
             foreach (string partName in meshDict.Keys)
             {
-                Transform tPart = partName.Equals("Head") ? head.transform : head.transform.FindChildStartsWithRecursive(partName);
+                if (partName.Equals("Knife") && knife == null) continue;
+                Transform tPart = 
+                    partName.Equals("Knife") ? knife.transform : (
+                    partName.Equals("Head") ? head.transform : 
+                    head.transform.FindChildStartsWithRecursive(partName));
                 string[] boneNames = partName == "Body_Body" ? 
                     new string[] { "NeckTie", "Body_Top", "Jnt_Body", "Jnt_Tail" } :
                     new string[] { allowedPartToBone[partName] };
@@ -708,6 +717,7 @@ namespace OC2DIYChef
                 }
 
                 SkinnedMeshRenderer part = tPart.GetComponent<SkinnedMeshRenderer>();
+                //part.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
 
                 Material material = part.material;
                 if (textureDict.ContainsKey("t_" + partName))
@@ -729,7 +739,11 @@ namespace OC2DIYChef
 
             foreach (string partName in meshDict.Keys)
             {
-                Transform tPart = partName.Equals("Head") ? head.transform : tMesh.FindChildStartsWithRecursive(partName);
+                if (partName.Equals("Knife") && knife == null) continue;
+                Transform tPart = 
+                    partName.Equals("Knife") ? knife.transform : (
+                    partName.Equals("Head") ? head.transform : 
+                    tMesh.FindChildStartsWithRecursive(partName));
                 string boneName = allowedPartToBone[partName];
                 if (tPart == null) continue;
 
@@ -862,10 +876,15 @@ namespace OC2DIYChef
             {
                 bindposesMatrices = new Dictionary<string, Matrix4x4>();
                 bindposesMatrices.Add("HeldItem", new Matrix4x4(
-                    new Vector4(0.90715f, 0.36555f, 0.20844f, 0.03940f),
-                    new Vector4(-0.17699f, -0.11794f, 0.97712f, 0.66710f),
-                    new Vector4(0.38177f, -0.92329f, -0.04229f, 0.24967f),
+                    new Vector4(0.90715f, 0.41948f, 0.03323f, -0.66467f),
+                    new Vector4(-0.17699f, 0.30871f, 0.93455f, -0.18004f),
+                    new Vector4(0.38177f, -0.85366f, 0.35429f, 0.15180f),
                     new Vector4(0.00000f, 0.00000f, 0.00000f, 1.00000f)));
+                //bindposesMatrices.Add("HeldItem", new Matrix4x4(
+                //    new Vector4(0.90715f, 0.36555f, 0.20844f, 0.03940f),
+                //    new Vector4(-0.17699f, -0.11794f, 0.97712f, 0.66710f),
+                //    new Vector4(0.38177f, -0.92329f, -0.04229f, 0.24967f),
+                //    new Vector4(0.00000f, 0.00000f, 0.00000f, 1.00000f)));
                 bindposesMatrices.Add("HatBase", new Matrix4x4(
                     new Vector4(0.00000f, -0.80064f, 0.59915f, 0.00000f),
                     new Vector4(0.00000f, 0.59915f, 0.80064f, 0.00000f),

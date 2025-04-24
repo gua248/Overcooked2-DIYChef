@@ -96,6 +96,8 @@ Add a line `LOBBYSWITCHCHEF=TRUE` to `prefer.txt` to switch chefs at the lobby b
   
   - A vehicle model `Wheelchair.obj`;
   
+  - A knife model `Knife.obj`；
+  
   - Individual texture / material files for each model (with prefix `t_` / `m_`, models without individual textures use the main texture / material);
   
     > For example, `Body_Top` tries to find texture files `t_Body_Top`, `t_Body`, `t_Head` sequentially.
@@ -107,6 +109,10 @@ Add a line `LOBBYSWITCHCHEF=TRUE` to `prefer.txt` to switch chefs at the lobby b
   
 
 ## Update Log
+
+#### v1.2
+
+- Support DIY knife model.
 
 #### v1.1
 

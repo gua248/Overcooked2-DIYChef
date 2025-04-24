@@ -104,7 +104,7 @@ public static class ObjImporter
                 if (currentText.StartsWith("f "))
                 {
                     currentText = currentText.Trim();                           //Trim the current line
-                    brokenString = currentText.Split(splitIdentifier, 50);      //Split the line into an array, separating the original line by blank spaces
+                    brokenString = currentText.Split(splitIdentifier, 100);      //Split the line into an array, separating the original line by blank spaces
                     face = face + brokenString.Length - 1;
                     triangles += 3 * (brokenString.Length - 3); /*brokenString.Length is 4 or greater since a face must have at least
                                                                                      3 vertices.  For each additional vertice, there is an additional
@@ -168,7 +168,7 @@ public static class ObjImporter
                 else
                 {
                     currentText = currentText.Trim();
-                    brokenString = currentText.Split(splitIdentifier, 50);
+                    brokenString = currentText.Split(splitIdentifier, 100);
                     switch (brokenString[0])
                     {
                         case "g":

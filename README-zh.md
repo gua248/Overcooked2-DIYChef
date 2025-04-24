@@ -80,32 +80,46 @@
   此外还可以提供：
 
   - 尾巴模型 `Tail.obj`；
-  
+
   - 固定在头部的部件模型 `Head{1/2}.obj`；
-  
+
   - 眼部模型 `Eyes.obj`（睁眼），`Eyes2_Blinks.obj`（闭眼），`Eyebrows.obj`（眉毛）；
-  
+
   - 身体各部分模型 `Body_Body.obj`, `Body_Top.obj`, `Body_NeckTie.obj`, `Body_Tail.obj`, `Body_Bottom.obj`，以及身体贴图和材质 `t_Body.png`, `m_Body.txt`；
-  
+
     > - Body_Body 会根据顶点高度按不同权重绑定骨骼，动画效果类似弹簧；其余身体部分绑定单个骨骼。
     > - 身体贴图中全透明的部分会替换为厨师颜色（蓝 / 红 / 绿 / 黄）。
     > - 当且仅当提供 Body_Body 时会删除原本的身体。有需要时你可以提供一个空的 Body_Body。
     > - Tail 在厨师背上背包时会隐藏，Body_Tail 不会。
     > - 所有 Body_xxx 在厨师进入大炮时会隐藏。
-  
+
   - 载具模型 `Wheelchair.obj`；
-  
+
+  - 刀模型 `Knife.obj`；
+
   - 各模型的单独贴图 / 材质文件（文件名前缀 `t_` / `m_`，无单独贴图 / 材质的模型使用主贴图 / 材质）；
-  
-    > 例如 Body_Top 会依次尝试寻找贴图文件 t_Body_Top，t_Body，t_Head
-  
+
+    > - 例如 Body_Top 会依次尝试寻找贴图文件 t_Body_Top，t_Body，t_Head。
+    >
+    > - 材质参数说明：
+    >
+    >   `_Brightness_Intensity`：身体部分可用，总光照强度；
+    >   `_Metallic`：金属度；
+    >   `_RimIntensity`：边缘光强度；
+    >   `_RimPower`：边缘光衰减；
+    >   `_Roughness`：平滑度，值越大代表越平滑。
+
   - `INFO` 文件中可以添加 `BODY=xxx` 来使用不同的身体模型，例如 `BODY=Chef_Snowman`。
-  
+
 - 你可以自制帽子。需要提供帽子模型、贴图和材质 `HatName.obj`, `t_HatName.png`, `m_HatName.txt`，放在文件夹 `HatName` 中。不要使用以下帽子名：`None, Santa, Festive, Baseballcap, Baseball, Fancy`。
 
   
 
 ## 更新
+
+#### v1.2
+
+- 支持替换刀模型。
 
 #### v1.1
 
