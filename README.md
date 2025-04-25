@@ -113,6 +113,8 @@ Add a line `LOBBYSWITCHCHEF=TRUE` to `prefer.txt` to switch chefs at the lobby b
 #### v1.2
 
 - Support DIY knife model.
+- Fix default chef with DIY hat not displaying at first loading.
+- Reduce light on level ending UI.
 
 #### v1.1
 

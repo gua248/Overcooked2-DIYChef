@@ -10,6 +10,7 @@ using UnityEngine;
 using BitStream;
 using System.Collections.Generic;
 using System.Reflection.Emit;
+using UnityEngine.SceneManagement;
 
 namespace OC2DIYChef
 {
@@ -100,14 +101,19 @@ namespace OC2DIYChef
         public static void UIPlayerRootMenuStartPatch(UIPlayerRootMenu __instance)
         {
             GameObject light = GameObject.Find("day light");
-            if (light != null && GameObject.Find("hat light") == null)
+            if (light != null)
             {
-                var hatLight = GameObject.Instantiate(light);
-                hatLight.SetObjectLayer(light.layer);
-                hatLight.name = "hat light";
-                hatLight.transform.SetParent(light.transform.parent);
-                hatLight.GetComponent<Light>().intensity = 1.8f;
-                hatLight.GetComponent<Light>().cullingMask = 1 << HatData.hatLayer;
+                light.GetComponent<Light>().intensity = 0.5f;
+                if (GameObject.Find("hat light") == null)
+                {
+                    var hatLight = GameObject.Instantiate(light);
+                    SceneManager.MoveGameObjectToScene(hatLight, light.scene);
+                    hatLight.SetObjectLayer(light.layer);
+                    hatLight.name = "hat light";
+                    hatLight.transform.SetParent(light.transform.parent);
+                    hatLight.GetComponent<Light>().intensity = 1.8f;
+                    hatLight.GetComponent<Light>().cullingMask = 1 << HatData.hatLayer;
+                }
             }
             Camera camera = (Camera)AccessTools.Field(typeof(UIPlayerRootMenu), "m_chefCamera").GetValue(__instance);
             camera.cullingMask |= 1 << HatData.hatLayer;

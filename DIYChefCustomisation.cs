@@ -157,6 +157,7 @@ namespace OC2DIYChef
                 {
                     loadingCoroutine2 = null;
                     Time.timeScale = 1f;
+                    ClientUserSystem.usersChanged();
                 }
             }
         }
@@ -676,62 +677,77 @@ namespace OC2DIYChef
             SkinnedMeshRenderer head = tMesh.Find(template.HeadName).GetComponent<SkinnedMeshRenderer>();
             head.gameObject.name = name;
             SkinnedMeshRenderer body = tMesh.Find("Body").GetComponent<SkinnedMeshRenderer>();
-            SkinnedMeshRenderer knife = (
-                modelType == ChefMeshReplacer.ChefModelType.FrontEnd ? tMesh.Find("Knife") : (
-                modelType == ChefMeshReplacer.ChefModelType.InGame ? tMesh.Find("Cleaver") : null)
-                )?.GetComponent<SkinnedMeshRenderer>();
+            SkinnedMeshRenderer[] knife;
+            if (modelType == ChefMeshReplacer.ChefModelType.FrontEnd)
+                knife = new SkinnedMeshRenderer[1] { 
+                    tMesh.Find("Knife").GetComponent<SkinnedMeshRenderer>(),
+                };
+            else if (modelType == ChefMeshReplacer.ChefModelType.InGame)
+                knife = new SkinnedMeshRenderer[3] { 
+                    tMesh.Find("Cleaver").GetComponent<SkinnedMeshRenderer>(),
+                    tMesh.Find("Hatchet").GetComponent<SkinnedMeshRenderer>(),
+                    tMesh.Find("Hammer").GetComponent<SkinnedMeshRenderer>(),
+                };
+            else
+                knife = new SkinnedMeshRenderer[0];
 
             foreach (string partName in meshDict.Keys)
             {
-                if (partName.Equals("Knife") && knife == null) continue;
-                Transform tPart = 
-                    partName.Equals("Knife") ? knife.transform : (
-                    partName.Equals("Head") ? head.transform : 
-                    head.transform.FindChildStartsWithRecursive(partName));
-                string[] boneNames = partName == "Body_Body" ? 
+                SkinnedMeshRenderer[] allParts;
+                string[] boneNames = partName == "Body_Body" ?
                     new string[] { "NeckTie", "Body_Top", "Jnt_Body", "Jnt_Tail" } :
                     new string[] { allowedPartToBone[partName] };
                 bool isBody = partName.StartsWith("Body_");
-                if (tPart == null)
+
+                if (partName.Equals("Knife")) allParts = knife;
+                else
                 {
-                    if (partName.StartsWith("Hand")) continue;
-                    SkinnedMeshRenderer partTemplate = isBody ? body : head;
-                    GameObject insPart = GameObject.Instantiate(partTemplate.gameObject);
-                    insPart.hideFlags = HideFlags.HideAndDontSave;
-                    insPart.DestroyChildren();
-                    insPart.SetObjectLayer(partTemplate.gameObject.layer);
-                    insPart.name = partName;
-                    insPart.transform.SetParent(isBody ? body.transform.parent : head.transform, false);
-                    insPart.transform.localPosition = Vector3.zero;
-                    insPart.transform.localRotation = Quaternion.identity;
-                    insPart.transform.localScale = Vector3.one;
-                    Transform[] bones = insPart.GetComponent<SkinnedMeshRenderer>().bones;
-                    foreach (var boneName in boneNames)
-                        if (!bones.Any(x => x.name.Equals(boneName)))
-                        {
-                            Transform bone = prefab.transform.Find("Skeleton").FindChildRecursive(boneName);
-                            bones = bones.AddToArray(bone);
-                        }
-                    insPart.GetComponent<SkinnedMeshRenderer>().bones = bones;
-                    tPart = insPart.transform;
+                    Transform tPart = partName.Equals("Head") ? head.transform : head.transform.FindChildStartsWithRecursive(partName);
+                    if (tPart == null)
+                    {
+                        if (partName.StartsWith("Hand")) continue;
+                        SkinnedMeshRenderer partTemplate = isBody ? body : head;
+                        GameObject insPart = GameObject.Instantiate(partTemplate.gameObject);
+                        insPart.hideFlags = HideFlags.HideAndDontSave;
+                        insPart.DestroyChildren();
+                        insPart.SetObjectLayer(partTemplate.gameObject.layer);
+                        insPart.name = partName;
+                        insPart.transform.SetParent(isBody ? body.transform.parent : head.transform, false);
+                        insPart.transform.localPosition = Vector3.zero;
+                        insPart.transform.localRotation = Quaternion.identity;
+                        insPart.transform.localScale = Vector3.one;
+                        Transform[] bones = insPart.GetComponent<SkinnedMeshRenderer>().bones;
+                        foreach (var boneName in boneNames)
+                            if (!bones.Any(x => x.name.Equals(boneName)))
+                            {
+                                Transform bone = prefab.transform.Find("Skeleton").FindChildRecursive(boneName);
+                                bones = bones.AddToArray(bone);
+                            }
+                        insPart.GetComponent<SkinnedMeshRenderer>().bones = bones;
+                        tPart = insPart.transform;
+                    }
+                    allParts = new SkinnedMeshRenderer[1] { tPart.GetComponent<SkinnedMeshRenderer>() };
                 }
 
-                SkinnedMeshRenderer part = tPart.GetComponent<SkinnedMeshRenderer>();
-                //part.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+                foreach (var part in allParts)
+                {
+                    //part.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
 
-                Material material = part.material;
-                if (textureDict.ContainsKey("t_" + partName))
-                    material.SetTexture("_DiffuseMap", textureDict["t_" + partName]);
-                else if (textureDict.ContainsKey("t_Body") && isBody)
-                    material.SetTexture("_DiffuseMap", textureDict["t_Body"]);
-                else
-                    material.SetTexture("_DiffuseMap", textureDict["t_Head"]);
-                var materialFloat =
-                    materialDict.ContainsKey("m_" + partName) ? materialDict["m_" + partName] : (
-                    materialDict.ContainsKey("m_Body") && isBody ? materialDict["m_Body"] :
-                    materialDict["m_Head"]);
-                foreach (var pair in materialFloat)
-                    material.SetFloat(pair.Key, pair.Value);
+                    if (partName.Equals("Knife")) part.material = allParts[0].material;
+                    Material material = part.material;
+                    if (textureDict.ContainsKey("t_" + partName))
+                        material.SetTexture("_DiffuseMap", textureDict["t_" + partName]);
+                    else if (textureDict.ContainsKey("t_Body") && isBody)
+                        material.SetTexture("_DiffuseMap", textureDict["t_Body"]);
+                    else
+                        material.SetTexture("_DiffuseMap", textureDict["t_Head"]);
+                    var materialFloat =
+                        materialDict.ContainsKey("m_" + partName) ? materialDict["m_" + partName] : (
+                        materialDict.ContainsKey("m_Body") && isBody ? materialDict["m_Body"] :
+                        materialDict["m_Head"]);
+                    foreach (var pair in materialFloat)
+                        material.SetFloat(pair.Key, pair.Value);
+                }
             }
 
             if (meshDict.ContainsKey("Body_Body"))
@@ -739,74 +755,77 @@ namespace OC2DIYChef
 
             foreach (string partName in meshDict.Keys)
             {
-                if (partName.Equals("Knife") && knife == null) continue;
-                Transform tPart = 
-                    partName.Equals("Knife") ? knife.transform : (
-                    partName.Equals("Head") ? head.transform : 
-                    tMesh.FindChildStartsWithRecursive(partName));
+                SkinnedMeshRenderer[] allParts;
                 string boneName = allowedPartToBone[partName];
-                if (tPart == null) continue;
-
-                SkinnedMeshRenderer part = tPart.GetComponent<SkinnedMeshRenderer>();
-
-                Mesh meshPart = meshDict[partName];
-                meshPart.name = partName;
-                meshPart.bindposes = part.bones.Select(x => BindPoses.GetMatrix(x.name)).ToArray();
-
-                BoneWeight[] boneWeights = new BoneWeight[meshPart.vertexCount];
-                if (partName != "Body_Body")
-                {
-                    int i = part.bones.FindIndex_Predicate(x => x.name.Equals(boneName));
-                    if (i < 0) i = 0;
-                    for (int j = 0; j < meshPart.vertexCount; j++)
-                    {
-                        boneWeights[j].weight0 = 1;
-                        boneWeights[j].boneIndex0 = i;
-                    }
-                }
+                if (partName.Equals("Knife")) allParts = knife;
                 else
                 {
-                    int i1 = part.bones.FindIndex_Predicate(x => x.name.Equals("Body_Top"));
-                    int i2 = part.bones.FindIndex_Predicate(x => x.name.Equals("Jnt_Body"));
-                    for (int j = 0; j < meshPart.vertexCount; j++)
+                    Transform tPart = partName.Equals("Head") ? head.transform : tMesh.FindChildStartsWithRecursive(partName);
+                    if (tPart == null) continue;
+                    allParts = new SkinnedMeshRenderer[1] { tPart.GetComponent<SkinnedMeshRenderer>() };
+                }
+
+                foreach (var part in allParts)
+                {
+                    Mesh meshPart = meshDict[partName];
+                    meshPart.name = partName;
+                    meshPart.bindposes = part.bones.Select(x => BindPoses.GetMatrix(x.name)).ToArray();
+
+                    BoneWeight[] boneWeights = new BoneWeight[meshPart.vertexCount];
+                    if (partName != "Body_Body")
                     {
-                        boneWeights[j].boneIndex0 = i1;
-                        boneWeights[j].boneIndex1 = i2;
-                        float y = meshPart.vertices[j].y;
-                        if (y > 0.54)
+                        int i = part.bones.FindIndex_Predicate(x => x.name.Equals(boneName));
+                        if (i < 0) i = 0;
+                        for (int j = 0; j < meshPart.vertexCount; j++)
                         {
-                            boneWeights[j].weight0 = 1.0f;
-                            boneWeights[j].weight1 = 0.0f;
-                        }
-                        else if (y > 0.46)
-                        {
-                            boneWeights[j].weight0 = 0.75f;
-                            boneWeights[j].weight1 = 0.25f;
-                        }
-                        else if (y > 0.38)
-                        {
-                            boneWeights[j].weight0 = 0.5f;
-                            boneWeights[j].weight1 = 0.5f;
-                        }
-                        else if (y > 0.30)
-                        {
-                            boneWeights[j].weight0 = 0.3f;
-                            boneWeights[j].weight1 = 0.7f;
-                        }
-                        else if (y > 0.22)
-                        {
-                            boneWeights[j].weight0 = 0.1f;
-                            boneWeights[j].weight1 = 0.9f;
-                        }
-                        else
-                        {
-                            boneWeights[j].weight0 = 0.0f;
-                            boneWeights[j].weight1 = 1.0f;
+                            boneWeights[j].weight0 = 1;
+                            boneWeights[j].boneIndex0 = i;
                         }
                     }
+                    else
+                    {
+                        int i1 = part.bones.FindIndex_Predicate(x => x.name.Equals("Body_Top"));
+                        int i2 = part.bones.FindIndex_Predicate(x => x.name.Equals("Jnt_Body"));
+                        for (int j = 0; j < meshPart.vertexCount; j++)
+                        {
+                            boneWeights[j].boneIndex0 = i1;
+                            boneWeights[j].boneIndex1 = i2;
+                            float y = meshPart.vertices[j].y;
+                            if (y > 0.54)
+                            {
+                                boneWeights[j].weight0 = 1.0f;
+                                boneWeights[j].weight1 = 0.0f;
+                            }
+                            else if (y > 0.46)
+                            {
+                                boneWeights[j].weight0 = 0.75f;
+                                boneWeights[j].weight1 = 0.25f;
+                            }
+                            else if (y > 0.38)
+                            {
+                                boneWeights[j].weight0 = 0.5f;
+                                boneWeights[j].weight1 = 0.5f;
+                            }
+                            else if (y > 0.30)
+                            {
+                                boneWeights[j].weight0 = 0.3f;
+                                boneWeights[j].weight1 = 0.7f;
+                            }
+                            else if (y > 0.22)
+                            {
+                                boneWeights[j].weight0 = 0.1f;
+                                boneWeights[j].weight1 = 0.9f;
+                            }
+                            else
+                            {
+                                boneWeights[j].weight0 = 0.0f;
+                                boneWeights[j].weight1 = 1.0f;
+                            }
+                        }
+                    }
+                    meshPart.boneWeights = boneWeights;
+                    part.sharedMesh = meshPart;
                 }
-                meshPart.boneWeights = boneWeights;
-                part.sharedMesh = meshPart;
             }
         }
     }
