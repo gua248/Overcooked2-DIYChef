@@ -100,11 +100,20 @@ namespace OC2DIYChef
         [HarmonyPatch(typeof(UIPlayerRootMenu), "Start")]
         public static void UIPlayerRootMenuStartPatch(UIPlayerRootMenu __instance)
         {
+<<<<<<< HEAD
             GameObject light = GameObject.Find("day light");
             if (light != null)
             {
                 light.GetComponent<Light>().intensity = 0.5f;
                 if (GameObject.Find("hat light") == null)
+=======
+            Light[] lights = GameObject.FindObjectsOfType<Light>();
+            bool hasHatLight = lights.Any(x => x.name == "hat light");
+
+            foreach (var light in lights)
+            {
+                if (light.name == "day light" && light.transform.FindParentRecursive("Art") == null)
+>>>>>>> 3324d92 (fix light intensity in some levels)
                 {
                     var hatLight = GameObject.Instantiate(light);
                     SceneManager.MoveGameObjectToScene(hatLight, light.scene);
