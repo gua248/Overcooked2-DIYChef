@@ -786,11 +786,12 @@ namespace OC2DIYChef
                     {
                         int i1 = part.bones.FindIndex_Predicate(x => x.name.Equals("Body_Top"));
                         int i2 = part.bones.FindIndex_Predicate(x => x.name.Equals("Jnt_Body"));
+                        Vector3[] v = meshPart.vertices;
                         for (int j = 0; j < meshPart.vertexCount; j++)
                         {
                             boneWeights[j].boneIndex0 = i1;
                             boneWeights[j].boneIndex1 = i2;
-                            float y = meshPart.vertices[j].y;
+                            float y = v[j].y;
                             if (y > 0.54)
                             {
                                 boneWeights[j].weight0 = 1.0f;
